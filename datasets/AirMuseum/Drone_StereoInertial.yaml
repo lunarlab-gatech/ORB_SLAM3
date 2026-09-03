@@ -1,0 +1,96 @@
+%YAML:1.0
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters (AirMuseum Drone - Stereo-Inertial, rectified)
+#--------------------------------------------------------------------------------------------
+File.version: "1.0"
+
+Camera.type: "PinHole"
+
+# Rectified stereo intrinsics (identical for both cameras post-rectification)
+Camera1.fx: 306.6875
+Camera1.fy: 306.6875
+Camera1.cx: 320.0679
+Camera1.cy: 254.7348
+
+Camera1.k1: 0.0
+Camera1.k2: 0.0
+Camera1.p1: 0.0
+Camera1.p2: 0.0
+
+Camera2.fx: 306.6875
+Camera2.fy: 306.6875
+Camera2.cx: 320.0679
+Camera2.cy: 254.7348
+
+Camera2.k1: 0.0
+Camera2.k2: 0.0
+Camera2.p1: 0.0
+Camera2.p2: 0.0
+
+# Camera resolution
+Camera.width: 640
+Camera.height: 512
+
+# Camera frames per second (~20Hz)
+Camera.fps: 20
+
+# Color order of the images (0: BGR, 1: RGB) - irrelevant for Mono8 images
+Camera.RGB: 0
+
+# Close/Far threshold. Baseline times.
+Stereo.ThDepth: 40.0
+
+# Transformation from right camera (cam1) to left camera (cam0), rectified frame
+# Pure horizontal baseline: 0.26329 m
+Stereo.T_c1_c2: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [1.0, 0.0, 0.0, 0.26329,
+          0.0, 1.0, 0.0, 0.0,
+          0.0, 0.0, 1.0, 0.0,
+          0.0, 0.0, 0.0, 1.0]
+
+# Transformation from rectified camera 0 to body-frame (imu)
+IMU.T_b_c1: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [-0.00052110255277, -0.17259883441,  0.98499206637,  0.206397,
+          -0.99999911986,    -0.0011118832062, -0.00072387571825,  0.124721,
+           0.0012201362420,  -0.98499157665, -0.17259810309,  0.000740,
+           0.0,       0.0,       0.0,       1.0]
+
+# Do not insert KFs when recently lost
+IMU.InsertKFsWhenLost: 0
+
+# IMU noise parameters (from AirMuseum sensors/imu.yaml)
+IMU.NoiseGyro: 0.0012
+IMU.NoiseAcc: 0.0202
+IMU.GyroWalk: 0.0001
+IMU.AccWalk: 0.0009
+IMU.Frequency: 100.0
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+#--------------------------------------------------------------------------------------------
+ORBextractor.nFeatures: 3000
+ORBextractor.scaleFactor: 1.1
+ORBextractor.nLevels: 10
+ORBextractor.iniThFAST: 15
+ORBextractor.minThFAST: 5
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -3.5
+Viewer.ViewpointF: 500.0
