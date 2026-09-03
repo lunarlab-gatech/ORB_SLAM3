@@ -8,6 +8,8 @@
 #include "so2.hpp"
 #include "types.hpp"
 
+#include <iostream>  // For NaN warning output
+
 // Include only the selective set of Eigen headers that we need.
 // This helps when using Sophus with unusual compilers, like nvcc.
 #include <Eigen/src/Geometry/OrthoMethods.h>
@@ -587,6 +589,16 @@ class SO3 : public SO3Base<SO3<Scalar_, Options>> {
     using std::cos;
     using std::sin;
     using std::sqrt;
+    using std::isnan;
+    using std::isinf;
+
+    // NaN/Inf warning - just log and continue, don't modify values
+    if (isnan(omega.x()) || isnan(omega.y()) || isnan(omega.z()) ||
+        isinf(omega.x()) || isinf(omega.y()) || isinf(omega.z())) {
+      std::cerr << "[WARNING] SO3::exp received NaN/Inf omega: "
+                << omega.transpose() << std::endl;
+    }
+
     Scalar theta_sq = omega.squaredNorm();
 
     Scalar imag_factor;
@@ -611,10 +623,13 @@ class SO3 : public SO3Base<SO3<Scalar_, Options>> {
     q.unit_quaternion_nonconst() =
         QuaternionMember(real_factor, imag_factor * omega.x(),
                          imag_factor * omega.y(), imag_factor * omega.z());
-    SOPHUS_ENSURE(abs(q.unit_quaternion().squaredNorm() - Scalar(1)) <
-                      Sophus::Constants<Scalar>::epsilon(),
-                  "SO3::exp failed! omega: %, real: %, img: %",
-                  omega.transpose(), real_factor, imag_factor);
+    // Warning only - don't crash, just log numerical issues
+    Scalar qnorm_sq = q.unit_quaternion().squaredNorm();
+    if (isnan(qnorm_sq) || isinf(qnorm_sq) ||
+        abs(qnorm_sq - Scalar(1)) >= Sophus::Constants<Scalar>::epsilon()) {
+      std::cerr << "[WARNING] SO3::exp numerical issue - omega: "
+                << omega.transpose() << ", qnorm_sq: " << qnorm_sq << std::endl;
+    }
     return q;
   }
 

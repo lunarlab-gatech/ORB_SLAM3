@@ -14,16 +14,16 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
 
 # Check C++11 or C++0x support
 include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
-CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
-if(COMPILER_SUPPORTS_CXX11)
-   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
+CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14_ALT)
+if(COMPILER_SUPPORTS_CXX14)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
    add_definitions(-DCOMPILEDWITHC11)
-   message(STATUS "Using flag -std=c++11.")
-elseif(COMPILER_SUPPORTS_CXX0X)
-   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+   message(STATUS "Using flag -std=c++14.")
+elseif(COMPILER_SUPPORTS_CXX14_ALT)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
    add_definitions(-DCOMPILEDWITHC0X)
-   message(STATUS "Using flag -std=c++0x.")
+   message(STATUS "Using flag -std=c++14.")
 else()
    message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 endif()
@@ -145,6 +145,11 @@ add_executable(rgbd_tum
         Examples/RGB-D/rgbd_tum.cc)
 target_link_libraries(rgbd_tum ${PROJECT_NAME})
 
+# Custom AirSim RGB-D example (no IMU)
+add_executable(rgbd_airsim
+        Examples/RGB-D/rgbd_airsim.cc)
+target_link_libraries(rgbd_airsim ${PROJECT_NAME})
+
 if(realsense2_FOUND)
     add_executable(rgbd_realsense_D435i
             Examples/RGB-D/rgbd_realsense_D435i.cc)
@@ -161,6 +166,11 @@ if(realsense2_FOUND)
     target_link_libraries(rgbd_inertial_realsense_D435i ${PROJECT_NAME})
 endif()
 
+# Custom AirSim RGB-D-Inertial example
+add_executable(rgbd_inertial_airsim
+        Examples/RGB-D-Inertial/rgbd_inertial_airsim.cc)
+target_link_libraries(rgbd_inertial_airsim ${PROJECT_NAME})
+
 #Stereo examples
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
 
@@ -175,6 +185,11 @@ target_link_libraries(stereo_euroc ${PROJECT_NAME})
 add_executable(stereo_tum_vi
         Examples/Stereo/stereo_tum_vi.cc)
 target_link_libraries(stereo_tum_vi ${PROJECT_NAME})
+
+# Custom AirSim Stereo example
+add_executable(stereo_airsim
+        Examples/Stereo/stereo_airsim.cc)
+target_link_libraries(stereo_airsim ${PROJECT_NAME})
 
 if(realsense2_FOUND)
     add_executable(stereo_realsense_t265
@@ -246,6 +261,11 @@ target_link_libraries(stereo_inertial_euroc ${PROJECT_NAME})
 add_executable(stereo_inertial_tum_vi
         Examples/Stereo-Inertial/stereo_inertial_tum_vi.cc)
 target_link_libraries(stereo_inertial_tum_vi ${PROJECT_NAME})
+
+# Custom AirMuseum Stereo-Inertial example
+add_executable(stereo_inertial_airmuseum
+        Examples/Stereo-Inertial/stereo_inertial_airmuseum.cc)
+target_link_libraries(stereo_inertial_airmuseum ${PROJECT_NAME})
 
 if(realsense2_FOUND)
     add_executable(stereo_inertial_realsense_t265
