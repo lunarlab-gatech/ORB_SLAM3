@@ -1,4 +1,73 @@
-# ORB-SLAM3
+# ORB-SLAM3: Hercules + AirMuseum
+
+Custom ORB-SLAM3 setup for running visual/RGB-D odometry on the Hercules and AirMuseum
+multi-robot datasets, built inside Docker with custom dataset loaders (the stock ORB-SLAM3
+examples only support EuRoC/TUM/KITTI/RealSense formats).
+
+This repo holds source and configuration only — build artifacts, the Python venv, and raw
+datasets are not tracked (see `.gitignore`). Detailed step-by-step setup is in
+[`CLAUDE.md`](CLAUDE.md); this file is a quick orientation.
+
+
+## Not included (obtain separately)
+
+- **Datasets**: Hercules (`raw_data_hercules/`) and AirMuseum data are large, external, and
+  not public — copy them from wherever your team stores them (see `CLAUDE.md` / the
+  `docs/ORBSLAM3_SESSION_HANDOFF.md` doc for expected directory layout).
+- **ORB Vocabulary** (~125MB): `build.sh` expects `Vocabulary/ORBvoc.txt.tar.gz` to exist
+  before it runs (it `tar -xf`s it in place). Fetch it from the upstream ORB_SLAM3 repo before
+  building — `build.sh` will fail partway through otherwise:
+  ```
+  curl -fL -o Vocabulary/ORBvoc.txt.tar.gz \
+    https://github.com/UZ-SLAMLab/ORB_SLAM3/raw/master/Vocabulary/ORBvoc.txt.tar.gz
+  ```
+- **Python env** for the extraction/comparison scripts: `python3 -m venv venv && pip install
+  numpy opencv-python scipy pyyaml matplotlib`.
+- **robotdataprocess**, for anything touching ROS-bag datasets (AirMuseum): vendored as the
+  `Thirdparty/robotdataprocess` submodule (`develop` branch) — after cloning, run
+  `git submodule update --init --recursive` (or clone with `--recurse-submodules`), then
+  `pip3 install Thirdparty/robotdataprocess` to install it into the container's Python env.
+
+## Quick start
+
+1. Build the Docker image: `cd docker && ./build_image.sh` (tags it `orbslam3-ubuntu22`).
+2. Start the persistent container: `./run_container.sh` (creates+attaches to a container
+   named `orbslam3`, with this repo mounted at `~/orb_slam3_ws` and datasets at `~/data`,
+   both inside the container).
+   From another shell, `./enter_container.sh` attaches an additional session to it.
+3. Build ORB-SLAM3 inside it: see `CLAUDE.md` Step 2 for the custom-loader setup and build
+   command (`cd ~/orb_slam3_ws/src/ORB_SLAM3 && ./build.sh`).
+4. Run `Research/run_airmuseum.py --robot {drone,robotA,robotB,robotC} --sensors-dir
+   <path to Kalibr calibration> --config <path to the ORB-SLAM3 Stereo-Inertial yaml>` — loads
+   that robot's data via `robotdataprocess` and feeds it directly into ORB-SLAM3 through the
+   `orbslam3_python` pybind11 module (built by step 3), no flat-file intermediate.
+
+## Known issues
+
+- Inertial modes (`IMU_STEREO`, `IMU_RGBD`, `IMU_MONOCULAR`) share a fragile code path in this
+  ORB_SLAM3 fork's `Tracking::PredictStateIMU()` — a null-pointer dereference has been observed
+  causing a deterministic segfault on real (non-synthetic) IMU data. RGB-D-only mode has been
+  the reliable path for this project; see `docs/ORBSLAM3_SESSION_HANDOFF.md` / `docs/IMU_ISSUES_AND_FIXES.md`.
+- RGB-D-only mode has no gravity reference (no IMU in the loop), so the output trajectory's
+  world-frame orientation is arbitrary. If you need a gravity-aligned axis, align the full pose
+  (position *and* orientation) to a gravity-referenced ground truth rather than relying on
+  ORB-SLAM3's own output.
+
+## Additional project docs
+
+Project-specific writeups (loop-closure studies, per-dataset analyses, session handoffs, IMU
+troubleshooting) have been moved into [`docs/`](docs/):
+
+- [`docs/ORBSLAM3_SESSION_HANDOFF.md`](docs/ORBSLAM3_SESSION_HANDOFF.md)
+- [`docs/ORBSLAM3_RESULTS.md`](docs/ORBSLAM3_RESULTS.md)
+- [`docs/IMU_ISSUES_AND_FIXES.md`](docs/IMU_ISSUES_AND_FIXES.md)
+- [`docs/COMPLETE_LOOP_CLOSURE_STUDY.md`](docs/COMPLETE_LOOP_CLOSURE_STUDY.md)
+- [`docs/AROUNDSHORTSEQ_LOOP_CLOSURE_STUDY.md`](docs/AROUNDSHORTSEQ_LOOP_CLOSURE_STUDY.md)
+- [`docs/DRONE2_LOOP_CLOSURE_ANALYSIS.md`](docs/DRONE2_LOOP_CLOSURE_ANALYSIS.md)
+
+---
+
+# Upstream ORB-SLAM3
 
 ### V1.0, December 22th, 2021
 **Authors:** Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez, [José M. M. Montiel](http://webdiis.unizar.es/~josemari/), [Juan D. Tardos](http://webdiis.unizar.es/~jdtardos/).
@@ -13,22 +82,6 @@ This software is based on [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2) deve
 
 <a href="https://youtu.be/HyLNq-98LRo" target="_blank"><img src="https://img.youtube.com/vi/HyLNq-98LRo/0.jpg" 
 alt="ORB-SLAM3" width="240" height="180" border="10" /></a>
-
-### Related Publications:
-
-[ORB-SLAM3] Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez, José M. M. Montiel and Juan D. Tardós, **ORB-SLAM3: An Accurate Open-Source Library for Visual, Visual-Inertial and Multi-Map SLAM**, *IEEE Transactions on Robotics 37(6):1874-1890, Dec. 2021*. **[PDF](https://arxiv.org/abs/2007.11898)**.
-
-[IMU-Initialization] Carlos Campos, J. M. M. Montiel and Juan D. Tardós, **Inertial-Only Optimization for Visual-Inertial Initialization**, *ICRA 2020*. **[PDF](https://arxiv.org/pdf/2003.05766.pdf)**
-
-[ORBSLAM-Atlas] Richard Elvira, J. M. M. Montiel and Juan D. Tardós, **ORBSLAM-Atlas: a robust and accurate multi-map system**, *IROS 2019*. **[PDF](https://arxiv.org/pdf/1908.11585.pdf)**.
-
-[ORBSLAM-VI] Raúl Mur-Artal, and Juan D. Tardós, **Visual-inertial monocular SLAM with map reuse**, IEEE Robotics and Automation Letters, vol. 2 no. 2, pp. 796-803, 2017. **[PDF](https://arxiv.org/pdf/1610.05949.pdf)**. 
-
-[Stereo and RGB-D] Raúl Mur-Artal and Juan D. Tardós. **ORB-SLAM2: an Open-Source SLAM System for Monocular, Stereo and RGB-D Cameras**. *IEEE Transactions on Robotics,* vol. 33, no. 5, pp. 1255-1262, 2017. **[PDF](https://arxiv.org/pdf/1610.06475.pdf)**.
-
-[Monocular] Raúl Mur-Artal, José M. M. Montiel and Juan D. Tardós. **ORB-SLAM: A Versatile and Accurate Monocular SLAM System**. *IEEE Transactions on Robotics,* vol. 31, no. 5, pp. 1147-1163, 2015. (**2015 IEEE Transactions on Robotics Best Paper Award**). **[PDF](https://arxiv.org/pdf/1502.00956.pdf)**.
-
-[DBoW2 Place Recognition] Dorian Gálvez-López and Juan D. Tardós. **Bags of Binary Words for Fast Place Recognition in Image Sequences**. *IEEE Transactions on Robotics,* vol. 28, no. 5, pp. 1188-1197, 2012. **[PDF](http://doriangalvez.com/php/dl.php?dlp=GalvezTRO12.pdf)**
 
 # 1. License
 
@@ -49,6 +102,7 @@ If you use ORB-SLAM3 in an academic work, please cite:
       pages={1874-1890},
       year={2021}
      }
+
 
 # 2. Prerequisites
 We have tested the library in **Ubuntu 16.04** and **18.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.

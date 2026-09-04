@@ -1,5 +1,0 @@
-acc_n: 2.02e-2     # accelerometer measurement noise standard deviation.
-gyr_n: 1.20e-3     # gyroscope measurement noise standard deviation.
-acc_w: 9.00e-4     # accelerometer bias random work noise standard deviation.
-gyr_w: 1.00e-4     # gyroscope bias random work noise standard deviation.
-g_norm: 9.81007    # gravity magnitude

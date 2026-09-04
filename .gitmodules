@@ -1,0 +1,4 @@
+[submodule "Thirdparty/robotdataprocess"]
+	path = Thirdparty/robotdataprocess
+	url = https://github.com/lunarlab-gatech/robotdataprocess.git
+	branch = develop

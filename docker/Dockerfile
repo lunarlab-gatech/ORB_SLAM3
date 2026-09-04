@@ -3,7 +3,7 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake git pkg-config ninja-build ca-certificates curl \
+    build-essential cmake git pkg-config ninja-build ca-certificates curl gnupg \
     python3-dev python3-pip \
     libopencv-dev libeigen3-dev libboost-all-dev libssl-dev \
     libatlas-base-dev libsuitesparse-dev \
@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo && \
     rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir numpy
+RUN pip3 install --no-cache-dir numpy pybind11
 
 # Pangolin (using v0.8 for better compatibility)
 RUN git clone --recursive https://github.com/stevenlovegrove/Pangolin.git /opt/Pangolin && \
