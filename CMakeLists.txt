@@ -135,6 +135,25 @@ if(realsense2_FOUND)
     )
 endif()
 
+# Python bindings (pybind11) for feeding data (e.g. loaded via
+# robotdataprocess) directly into ORB_SLAM3::System from Python. Skipped
+# with a warning, rather than failing the whole build, if pybind11 isn't
+# installed (pip3 install pybind11).
+execute_process(
+    COMMAND python3 -m pybind11 --cmakedir
+    OUTPUT_VARIABLE pybind11_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+find_package(pybind11 CONFIG QUIET)
+if(pybind11_FOUND)
+    pybind11_add_module(orbslam3_python python/orbslam3_python.cc)
+    target_link_libraries(orbslam3_python PRIVATE ${PROJECT_NAME} ${OpenCV_LIBS})
+    set_target_properties(orbslam3_python PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+else()
+    message(WARNING "pybind11 not found (pip3 install pybind11) -- skipping Python bindings target 'orbslam3_python'.")
+endif()
+
 
 # Build examples
 

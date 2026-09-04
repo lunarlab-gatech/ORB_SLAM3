@@ -19,9 +19,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip3 install --no-cache-dir numpy pybind11
 
-# Pangolin (using v0.8 for better compatibility)
+# Pangolin. Pinned to v0.6, not a newer release:
+# v0.8+ additionally bundles a sigslot header that needs C++14 (decay_t,
+# enable_if_t) even under ORB-SLAM3's -std=c++11 -- confirmed by test-compiling
+# Viewer.cc/MapDrawer.cc against v0.6 at -std=c++11 (clean) vs. v0.8 (fails).
+# v0.7 was also tried and rejected: it fails to build here on Ubuntu 22.04/
+# GCC 11 on an unrelated missing-#include<limits> bug in its own source.
 RUN git clone --recursive https://github.com/stevenlovegrove/Pangolin.git /opt/Pangolin && \
-    cd /opt/Pangolin && git checkout v0.8 && \
+    cd /opt/Pangolin && git checkout v0.6 && \
     mkdir build && cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
              -DBUILD_EXAMPLES=OFF \
