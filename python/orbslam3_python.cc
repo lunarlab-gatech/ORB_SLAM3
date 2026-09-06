@@ -47,12 +47,12 @@ PYBIND11_MODULE(orbslam3_python, m) {
               * Feeds one rectified stereo frame plus the IMU samples collected since the
               * previous frame into ORB_SLAM3::System::TrackStereo.
               *
-              * @param im_left (H, W) uint8 rectified left image.
-              * @param im_right (H, W) uint8 rectified right image.
+              * @param im_left (H, W) uint8 raw (unrectified) left image.
+              * @param im_right (H, W) uint8 raw (unrectified) right image.
               * @param timestamp Frame timestamp, in seconds.
               * @param imu_meas (N, 7) float64 array of IMU samples since the previous frame,
-              *     columns [t, ax, ay, az, gx, gy, gz] -- i.e. robotdataprocess's ImuData.timestamps,
-              *     .lin_acc, and .ang_vel hstacked in that order, with N possibly 0.
+              *     columns [ax, ay, az, gx, gy, gz, t] -- matching IMU::Point's own constructor
+              *     order (accel, gyro, timestamp), with N possibly 0.
               * @return None; call save_trajectory_tum()/save_keyframe_trajectory_tum() after the
               *     tracking loop to retrieve results.
               */
@@ -64,7 +64,7 @@ PYBIND11_MODULE(orbslam3_python, m) {
                  std::vector<ORB_SLAM3::IMU::Point> vImuMeas;
                  vImuMeas.reserve(info.shape[0]);
                  for (ssize_t i = 0; i < info.shape[0]; ++i, row += 7) {
-                     vImuMeas.emplace_back(row[1], row[2], row[3], row[4], row[5], row[6], row[0]);
+                     vImuMeas.emplace_back(row[0], row[1], row[2], row[3], row[4], row[5], row[6]);
                  }
                  self.TrackStereo(ToMatMono(im_left), ToMatMono(im_right), timestamp, vImuMeas);
              },
