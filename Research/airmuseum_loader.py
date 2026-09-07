@@ -22,6 +22,9 @@ class AirMuseumRobotData:
 class AirMuseumDataLoaderSLAM:
     """Dataloader for the AirMuseum dataset."""
 
+    # Depth beyond this is treated as no measurement.
+    MAX_VALID_DEPTH_M: float = 1000.0
+
     CROP_TIMES: dict[str, dict[str, tuple[Decimal, Optional[Decimal]]]] = {
         "Scenario5": {
             "drone": (Decimal('0.0'), None),
@@ -118,6 +121,7 @@ class AirMuseumDataLoaderSLAM:
             # No matching needed against depth_data: there's always a depth frame for
             # every left image frame. Just resize depth to match the rectified resolution.
             depth_data.resize(cam_data_left.height, cam_data_left.width)
+            depth_data.set_above_threshold_to_zero(AirMuseumDataLoaderSLAM.MAX_VALID_DEPTH_M)
 
             # Crop the defined start/end boundaries
             left_image_data.crop_data(start, end)

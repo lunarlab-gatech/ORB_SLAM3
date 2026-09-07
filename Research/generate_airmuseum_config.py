@@ -66,7 +66,7 @@ class AirMuseumConfigGenerator:
             f"Camera.height: {cl.height}\n",
             f"Camera.fps: {round(fps)}\n",  # Settings.cc reads this as an int, not a float.
             "Camera.RGB: 0\n", # Ignored as AirMuseum is greyscale
-            "Stereo.ThDepth: 40.0\n", # Maybe need to tune
+            "Stereo.ThDepth: 20.0\n", # Trusted-depth horizon is this times Stereo.b, so 5.3 m here
             f"Stereo.b: {robot_data.stereo_baseline_m!s}\n",
             "RGBD.DepthMapFactor: 1.0\n", # Depth is already in meters
             "loopClosing: 0\n", # Disabled
@@ -79,7 +79,7 @@ class AirMuseumConfigGenerator:
             f"IMU.AccWalk: {imu_noise['acc_w']!r}\n",
             f"IMU.Frequency: {imu_freq:.1f}\n",
 
-            "ORBextractor.nFeatures: 1200\n",
+            "ORBextractor.nFeatures: 2000\n",
             "ORBextractor.scaleFactor: 1.2\n",
             "ORBextractor.nLevels: 8\n",
             "ORBextractor.iniThFAST: 20\n",
