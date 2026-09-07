@@ -43,13 +43,18 @@ class AirMuseumRunner:
             use_viewer: Opens ORB-SLAM3's live Pangolin map/frame viewer, for debugging.
         """
 
+        use_imu = mode == AirMuseumRunner.Mode.RGBD_INERTIAL
+
+        if robot_name == "drone":
+            print("WARNING: drone's IMU is bursty/irregular and known to crash ORB-SLAM3's "
+                  "IMU preintegration; prefer OpenVINS for drone for now.")
+
         imu_yaml_path = str(Path(dataset_path).parent / "sensors" / "imu.yaml")
         vocab_path = str(AirMuseumRunner.REPO_ROOT / "Vocabulary" / "ORBvoc.txt")
-        config_path = str(AirMuseumRunner.REPO_ROOT / "Examples" / "RGB-D" / f"AirMuseum_{robot_name}.yaml")
+        config_subdir = "RGB-D-Inertial" if use_imu else "RGB-D"
+        config_path = str(AirMuseumRunner.REPO_ROOT / "Examples" / config_subdir / f"AirMuseum_{robot_name}.yaml")
         output_dir = AirMuseumRunner.REPO_ROOT / "output" / "airmuseum" / robot_name
         output_dir.mkdir(parents=True, exist_ok=True)
-
-        use_imu = mode == AirMuseumRunner.Mode.RGBD_INERTIAL
 
         data = AirMuseumDataLoaderSLAM.load_data(dataset_path, [robot_name])[robot_name]
         AirMuseumConfigGenerator.generate_config(data, imu_yaml_path, config_path)
@@ -81,6 +86,7 @@ class AirMuseumRunner:
             print(f"WARNING: imageScale={imageScale} != 1.0 -- this resize path is untested against depth_data's alignment/scale assumptions.")
 
         vTimesTrack = np.zeros(nImages, dtype=np.float64)
+        n_processed = nImages
         for ni in range(nImages):
             imRGB = data.left_image_data.images[ni]
             imD = data.depth_data.images[ni]
@@ -99,6 +105,15 @@ class AirMuseumRunner:
                     vImuMeas.append(imu_all[first_imu])
                     first_imu += 1
             vImuMeas = np.array(vImuMeas, dtype=np.float64) if vImuMeas else np.empty((0, 7), dtype=np.float64)
+
+            # ORB-SLAM3's IMU preintegration needs at least 2 samples to integrate over;
+            # fewer than that (observed at a sequence's true end, once the IMU stream runs
+            # out ahead of the camera stream) segfaults it. Stop here.
+            if use_imu and ni > 0 and len(vImuMeas) < 2:
+                n_processed = ni
+                print(f"WARNING: fewer than 2 IMU samples before frame {ni}/{nImages} -- "
+                      f"stopping early ({nImages - ni} frames not processed).")
+                break
 
             t1 = time.perf_counter()
             SLAM.track_rgbd(imRGB, imD, tframe, vImuMeas)
@@ -130,12 +145,12 @@ class AirMuseumRunner:
         # -- neither implemented, to avoid changing more core ORB-SLAM3 behavior than necessary).
         SLAM.shutdown()
 
-        # Tracking time statistics
-        vTimesTrack_sorted = np.sort(vTimesTrack)
-        totaltime = float(np.sum(vTimesTrack))
+        # Tracking time statistics (only over frames actually processed, see n_processed above)
+        vTimesTrack_sorted = np.sort(vTimesTrack[:n_processed])
+        totaltime = float(np.sum(vTimesTrack[:n_processed]))
         print("-------\n")
-        print(f"median tracking time: {vTimesTrack_sorted[nImages // 2]}")
-        print(f"mean tracking time: {totaltime / nImages}")
+        print(f"median tracking time: {vTimesTrack_sorted[n_processed // 2]}")
+        print(f"mean tracking time: {totaltime / n_processed}")
 
         SLAM.save_trajectory_tum(str(output_dir / f"f_{output_prefix}.txt"))
         SLAM.save_keyframe_trajectory_tum(str(output_dir / f"kf_{output_prefix}.txt"))

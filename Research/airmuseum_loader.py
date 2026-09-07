@@ -106,9 +106,8 @@ class AirMuseumDataLoaderSLAM:
             assert left_image_data.encoding == right_image_data.encoding, "Left/Right image encodings must match!"
             assert left_image_data.encoding == ImageData.ImageEncoding.Mono8, "Expected AirMuseum imagery to be Mono8"
 
-            # Align timestamps with the IMU's timestamps. depth_data shares the left
-            # camera's timing, since it was computed from the left camera's imagery.
-            CameraData.align_ImageData_and_CameraData_to_imu_ts([left_image_data, depth_data], cam_data_left)
+            # Align image data with IMU timestamps
+            CameraData.align_ImageData_and_CameraData_to_imu_ts([left_image_data], cam_data_left)
             CameraData.align_ImageData_and_CameraData_to_imu_ts([right_image_data], cam_data_right)
 
             # Sync the stereo pair, then rectify both to ideal pinhole images. This
@@ -123,6 +122,8 @@ class AirMuseumDataLoaderSLAM:
             # Crop the defined start/end boundaries
             left_image_data.crop_data(start, end)
             depth_data.crop_data(start, end)
+
+            # NOTE: Depth skips its alignment, synching, and undistorting as that was already done for it.
 
             # ==================================== Load Transformations =========================================
             # H_LO_to_I: raw Kalibr T_cam_imu for this robot's left/tracking camera,

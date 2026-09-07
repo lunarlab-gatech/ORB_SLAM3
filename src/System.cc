@@ -578,49 +578,55 @@ void System::SaveTrajectoryTUM(const string &filename)
     vector<KeyFrame*> vpKFs = mpAtlas->GetAllKeyFrames();
     sort(vpKFs.begin(),vpKFs.end(),KeyFrame::lId);
 
-    // Transform all keyframes so that the first keyframe is at the origin.
-    // After a loop closure the first keyframe might not be at the origin.
-    Sophus::SE3f Two = vpKFs[0]->GetPoseInverse();
-
     ofstream f;
     f.open(filename.c_str());
     f << fixed;
 
-    // Frame pose is stored relative to its reference keyframe (which is optimized by BA and pose graph).
-    // We need to get first the keyframe pose and then concatenate the relative transformation.
-    // Frames not localized (tracking failure) are not saved.
-
-    // For each frame we have a reference keyframe (lRit), the timestamp (lT) and a flag
-    // which is true when tracking failed (lbL).
-    list<ORB_SLAM3::KeyFrame*>::iterator lRit = mpTracker->mlpReferences.begin();
-    list<double>::iterator lT = mpTracker->mlFrameTimes.begin();
-    list<bool>::iterator lbL = mpTracker->mlbLost.begin();
-    for(list<Sophus::SE3f>::iterator lit=mpTracker->mlRelativeFramePoses.begin(),
-        lend=mpTracker->mlRelativeFramePoses.end();lit!=lend;lit++, lRit++, lT++, lbL++)
+    // Still create the (empty) file below if there are no keyframes to reference --
+    // matching SaveKeyFrameTrajectoryTUM's existing behavior on empty input, and
+    // avoiding a crash indexing vpKFs[0] with nothing in it.
+    if(!vpKFs.empty())
     {
-        if(*lbL)
-            continue;
+        // Transform all keyframes so that the first keyframe is at the origin.
+        // After a loop closure the first keyframe might not be at the origin.
+        Sophus::SE3f Two = vpKFs[0]->GetPoseInverse();
 
-        KeyFrame* pKF = *lRit;
+        // Frame pose is stored relative to its reference keyframe (which is optimized by BA and pose graph).
+        // We need to get first the keyframe pose and then concatenate the relative transformation.
+        // Frames not localized (tracking failure) are not saved.
 
-        Sophus::SE3f Trw;
-
-        // If the reference keyframe was culled, traverse the spanning tree to get a suitable keyframe.
-        while(pKF->isBad())
+        // For each frame we have a reference keyframe (lRit), the timestamp (lT) and a flag
+        // which is true when tracking failed (lbL).
+        list<ORB_SLAM3::KeyFrame*>::iterator lRit = mpTracker->mlpReferences.begin();
+        list<double>::iterator lT = mpTracker->mlFrameTimes.begin();
+        list<bool>::iterator lbL = mpTracker->mlbLost.begin();
+        for(list<Sophus::SE3f>::iterator lit=mpTracker->mlRelativeFramePoses.begin(),
+            lend=mpTracker->mlRelativeFramePoses.end();lit!=lend;lit++, lRit++, lT++, lbL++)
         {
-            Trw = Trw * pKF->mTcp;
-            pKF = pKF->GetParent();
+            if(*lbL)
+                continue;
+
+            KeyFrame* pKF = *lRit;
+
+            Sophus::SE3f Trw;
+
+            // If the reference keyframe was culled, traverse the spanning tree to get a suitable keyframe.
+            while(pKF->isBad())
+            {
+                Trw = Trw * pKF->mTcp;
+                pKF = pKF->GetParent();
+            }
+
+            Trw = Trw * pKF->GetPose() * Two;
+
+            Sophus::SE3f Tcw = (*lit) * Trw;
+            Sophus::SE3f Twc = Tcw.inverse();
+
+            Eigen::Vector3f twc = Twc.translation();
+            Eigen::Quaternionf q = Twc.unit_quaternion();
+
+            f << setprecision(6) << *lT << " " <<  setprecision(9) << twc(0) << " " << twc(1) << " " << twc(2) << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << endl;
         }
-
-        Trw = Trw * pKF->GetPose() * Two;
-
-        Sophus::SE3f Tcw = (*lit) * Trw;
-        Sophus::SE3f Twc = Tcw.inverse();
-
-        Eigen::Vector3f twc = Twc.translation();
-        Eigen::Quaternionf q = Twc.unit_quaternion();
-
-        f << setprecision(6) << *lT << " " <<  setprecision(9) << twc(0) << " " << twc(1) << " " << twc(2) << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << endl;
     }
     f.close();
     // cout << endl << "trajectory saved!" << endl;
