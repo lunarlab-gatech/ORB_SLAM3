@@ -7,19 +7,17 @@ from typing import Optional
 
 @dataclass
 class AirMuseumRobotData:
-    cam_data_left: CameraData
-    cam_data_right: CameraData
-    left_image_data: ImageDataOnDisk
-    right_image_data: ImageDataOnDisk
+    cam_data_left: CameraData  # Rectified: K is the undistorted pinhole intrinsics, D is zero.
+    left_image_data: ImageDataOnDisk  # Rectified left camera imagery.
+    depth_data: ImageDataOnDisk  # Per-frame depth (meters), aligned to left_image_data's pixel grid.
     imu_data: ImuData
     ground_truth: OdometryData
     H_I_to_LO: TransformationData  # ORB-SLAM3's IMU.T_b_c1: raw Kalibr T_cam_imu, inverted. Same (raw, non-FLU) frame as imu_data.
-    
-    # ORB-SLAM3's Stereo.T_c1_c2 (raw): p_LO = M @ p_RO. Confirmed by tracing
-    # KannalaBrandt8::TriangulateMatches's actual math (not the PinHole-only
-    # cv::stereoRectify convention, which doesn't apply to this camera type
-    # and would suggest the opposite, left-to-right, direction).
-    H_LO_to_RO: TransformationData
+
+    # ORB-SLAM3's Stereo.b: the rectified stereo baseline. RGB-D still needs this to
+    # manufacture a synthetic right-image coordinate per point (ur = u - mbf/depth), so
+    # bundle adjustment can use the same well-constrained stereo edges as real stereo.
+    stereo_baseline_m: float
 
 class AirMuseumDataLoaderSLAM:
     """Dataloader for the AirMuseum dataset."""
@@ -57,15 +55,10 @@ class AirMuseumDataLoaderSLAM:
     @staticmethod
     def load_data(dataset_path: str, robot_names: list[str]) -> dict[str, "AirMuseumRobotData"]:
         """Load the AirMuseum dataset using robotdataprocess, for feeding
-        ORB_SLAM3::System (Stereo-Inertial) directly via orbslam3_python.
+        ORB_SLAM3::System (RGB-D) directly via orbslam3_python.
 
-        No depth here: results/Fast-FoundationStereo's depth maps were computed
-        on rectified imagery, but ORB-SLAM3 has no rectification path for this
-        calibration's KannalaBrandt8/fisheye model (see the image-loading
-        comment below) and no way to give RGB-D a depth-specific calibration
-        distinct from Camera1 -- so that depth wouldn't correspond to the raw
-        images this loads. A Mono-Depth fallback would need its own separate,
-        rectification-aware loading path.
+        The precomputed depth was run on imagery resized down from this loader's
+        rectified resolution, so it's resized back up to match before use.
 
         Args:
             dataset_path: Root directory for one dataset version (e.g. ".../Scenario5").
@@ -94,38 +87,42 @@ class AirMuseumDataLoaderSLAM:
             # Camera constants
             left_cam_id = AirMuseumDataLoaderSLAM.ROBOT_LEFT_CAM[robot_name]
             right_cam_id = 'cam101' if left_cam_id == 'cam100' else 'cam100'
+            left_calib_name = AirMuseumDataLoaderSLAM.CAM_ID_TO_CALIB_NAME[left_cam_id]
+            right_calib_name = AirMuseumDataLoaderSLAM.CAM_ID_TO_CALIB_NAME[right_cam_id]
             left_bag = input_path / AirMuseumDataLoaderSLAM.CAM_ID_TO_BAG_NAME[left_cam_id]
             right_bag = input_path / AirMuseumDataLoaderSLAM.CAM_ID_TO_BAG_NAME[right_cam_id]
 
-            # ===================================== Get images and intrinsics & stereo sync =====================================
-            # Load stereo intrinstics
+            # ===================================== Get images, depth, and intrinsics =====================================
+            # Load stereo intrinsics
             calib_name = robot_name + "_cameras_calib.yaml"
             cam_data_left, cam_data_right = CameraData.from_kalibr_stereo(
-                dataset_config_path / 'sensors' / calib_name,
-                AirMuseumDataLoaderSLAM.CAM_ID_TO_CALIB_NAME[left_cam_id],
-                AirMuseumDataLoaderSLAM.CAM_ID_TO_CALIB_NAME[right_cam_id], alpha=0.0)
+                dataset_config_path / 'sensors' / calib_name, left_calib_name, right_calib_name, alpha=0.0)
 
-            # Load the Camera images (raw, unrectified). cam_data_left/right's K/D stay
-            # the raw Kalibr calibration too. ORB-SLAM3's KannalaBrandt8 camera model
-            # (this calibration's fisheye/equidistant distortion) does its own
-            # per-keypoint analytic undistortion and its own raw-image stereo matching
-            # (ComputeStereoFishEyeMatches); unlike its PinHole model, it has no
-            # internal rectification path, so it expects raw, unrectified images.
+            # Load the raw stereo pair (needed to compute the rectification below) and the
+            # precomputed depth for the left camera.
             left_image_data = ImageDataOnDisk.from_ros1_bag(left_bag, f'/{robot_name}/{left_cam_id}/image_raw')
             right_image_data = ImageDataOnDisk.from_ros1_bag(right_bag, f'/{robot_name}/{right_cam_id}/image_raw')
+            depth_data = ImageDataOnDisk.from_npy_files(results_path / "Fast-FoundationStereo" / robot_name / "depth", left_calib_name)
             assert left_image_data.encoding == right_image_data.encoding, "Left/Right image encodings must match!"
             assert left_image_data.encoding == ImageData.ImageEncoding.Mono8, "Expected AirMuseum imagery to be Mono8"
 
-            # Align timestamps with the IMU's timestamps
-            CameraData.align_ImageData_and_CameraData_to_imu_ts([left_image_data], cam_data_left)
+            # Align timestamps with the IMU's timestamps. depth_data shares the left
+            # camera's timing, since it was computed from the left camera's imagery.
+            CameraData.align_ImageData_and_CameraData_to_imu_ts([left_image_data, depth_data], cam_data_left)
             CameraData.align_ImageData_and_CameraData_to_imu_ts([right_image_data], cam_data_right)
 
-            # Get only synced images
+            # Sync the stereo pair, then rectify both to ideal pinhole images. This
+            # updates cam_data_left/right's K to the rectified intrinsics and zeroes D.
             ImageDataOnDisk.crop_to_matched(left_image_data, right_image_data, Decimal('0.01'))
+            ImageDataOnDisk.undistort_imagery_stereo(left_image_data, right_image_data, cam_data_left, cam_data_right)
+
+            # No matching needed against depth_data: there's always a depth frame for
+            # every left image frame. Just resize depth to match the rectified resolution.
+            depth_data.resize(cam_data_left.height, cam_data_left.width)
 
             # Crop the defined start/end boundaries
             left_image_data.crop_data(start, end)
-            right_image_data.crop_data(start, end)
+            depth_data.crop_data(start, end)
 
             # ==================================== Load Transformations =========================================
             # H_LO_to_I: raw Kalibr T_cam_imu for this robot's left/tracking camera,
@@ -133,22 +130,15 @@ class AirMuseumDataLoaderSLAM:
             # gives ORB-SLAM3's IMU.T_b_c1 directly, and imu_data below is in this same
             # native, non-FLU frame, so the two stay consistent.
             H_LO_to_I = TransformationData.from_kalibr(
-                dataset_config_path / 'sensors' / calib_name,
-                AirMuseumDataLoaderSLAM.CAM_ID_TO_CALIB_NAME[left_cam_id], "T_cam_imu",
+                dataset_config_path / 'sensors' / calib_name, left_calib_name, "T_cam_imu",
                 AirMuseumDataLoaderSLAM.NAME_TO_FRAME_MAP[robot_name])
             H_I_to_LO = H_LO_to_I.invert()
 
-            # H_LO_to_RO: ORB-SLAM3's Stereo.T_c1_c2 (see AirMuseumRobotData.H_LO_to_RO).
-            # from_kalibr_stereo() doesn't expose this (it only keeps K/D/R/P), so it's
-            # read directly here: Kalibr's T_cn_cnm1 always lives under "cam1" and gives
-            # cam1's pose w.r.t. cam0, i.e. p_cam1 = T_cn_cnm1 @ p_cam0 -- already
-            # H_LO_to_RO if cam1 is our left camera, or its inverse if cam1 is our right.
-            H_CN_to_CNM1 = TransformationData.from_kalibr(
-                dataset_config_path / 'sensors' / calib_name, 'cam1', "T_cn_cnm1", CoordinateFrame.NONE)
-            if AirMuseumDataLoaderSLAM.CAM_ID_TO_CALIB_NAME[right_cam_id] == 'cam0':
-                H_LO_to_RO = H_CN_to_CNM1
-            else:
-                H_LO_to_RO = H_CN_to_CNM1.invert()
+            # Stereo.b: the along-X baseline in the rectified frame, not the raw
+            # extrinsic's full translation (which may carry small Y/Z from real-world
+            # mechanical misalignment that rectification exists to remove). cam_data_right.P
+            # (unchanged by undistort_imagery_stereo) already encodes this directly.
+            stereo_baseline_m = abs(cam_data_right.P[0, 3] / cam_data_right.P[0, 0])
 
             # ===================================== Load Ground Truth ===========================================
             # GT is relabeled to a common FLU convention across robots purely for
@@ -160,14 +150,15 @@ class AirMuseumDataLoaderSLAM:
             ground_truth.crop_data(start, end)
 
             # ===================================== Load IMU ===========================================
+            # Unused by plain RGB-D (only IMU_RGBD consumes it), kept loaded for the
+            # eventual switch to RGB-D-Inertial.
             imu_data = ImuData.from_ros1_bag(
                 input_path / AirMuseumDataLoaderSLAM.CAM_ID_TO_BAG_NAME['cam100'], f'/{robot_name}/imu', f'{robot_name}_imu')
             imu_data.crop_data(start, end)
 
             robot_data[robot_name] = AirMuseumRobotData(
-                cam_data_left=cam_data_left, cam_data_right=cam_data_right,
-                left_image_data=left_image_data, right_image_data=right_image_data,
-                imu_data=imu_data, ground_truth=ground_truth, H_I_to_LO=H_I_to_LO, H_LO_to_RO=H_LO_to_RO,
+                cam_data_left=cam_data_left, left_image_data=left_image_data, depth_data=depth_data,
+                imu_data=imu_data, ground_truth=ground_truth, H_I_to_LO=H_I_to_LO, stereo_baseline_m=stereo_baseline_m,
             )
             print(f"Loaded data for {robot_name} from {input_path}...")
 

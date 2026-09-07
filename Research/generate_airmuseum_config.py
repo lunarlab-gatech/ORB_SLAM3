@@ -6,7 +6,7 @@ import yaml
 
 
 class AirMuseumConfigGenerator:
-    """Generates an ORB-SLAM3 Stereo-Inertial YAML config for one AirMuseum robot."""
+    """Generates an ORB-SLAM3 RGB-D YAML config for one AirMuseum robot."""
 
     @staticmethod
     def _opencv_matrix(key: str, matrix: np.ndarray) -> str:
@@ -14,6 +14,7 @@ class AirMuseumConfigGenerator:
         rows, cols = matrix.shape
         data = ", ".join(f"{v:.17g}" for v in matrix.flatten())
         return f"{key}: !!opencv-matrix\n  rows: {rows}\n  cols: {cols}\n  dt: f\n  data: [{data}]\n"
+
 
     @staticmethod
     def _average_rate(timestamps) -> float:
@@ -25,7 +26,10 @@ class AirMuseumConfigGenerator:
 
     @staticmethod
     def generate_config(robot_data: AirMuseumRobotData, imu_yaml_path: Union[str, Path], output_path: Union[str, Path]) -> None:
-        """Writes an ORB-SLAM3 Stereo-Inertial YAML config to output_path.
+        """Writes an ORB-SLAM3 RGB-D YAML config to output_path.
+
+        The IMU section is written but currently unused (plain RGB-D doesn't consume
+        it), kept for the eventual switch to RGB-D-Inertial.
 
         Args:
             robot_data: One robot's loaded data (see AirMuseumDataLoaderSLAM.load_data).
@@ -36,47 +40,35 @@ class AirMuseumConfigGenerator:
         with open(imu_yaml_path, 'r') as f:
             imu_noise = yaml.safe_load(f)
 
-        cl, cr = robot_data.cam_data_left, robot_data.cam_data_right
+        cl = robot_data.cam_data_left
         fps = AirMuseumConfigGenerator._average_rate(robot_data.left_image_data.timestamps)
         imu_freq = AirMuseumConfigGenerator._average_rate(robot_data.imu_data.timestamps)
 
         lines = [
             "%YAML:1.0\n",
             'File.version: "1.0"\n',
-            'Camera.type: "KannalaBrandt8"\n',
+            'Camera.type: "PinHole"\n',
 
             f"Camera1.fx: {cl.K[0, 0]!s}\n",
             f"Camera1.fy: {cl.K[1, 1]!s}\n",
             f"Camera1.cx: {cl.K[0, 2]!s}\n",
             f"Camera1.cy: {cl.K[1, 2]!s}\n",
-            f"Camera1.k1: {cl.D[0]!s}\n",
-            f"Camera1.k2: {cl.D[1]!s}\n",
-            f"Camera1.k3: {cl.D[2]!s}\n",
-            f"Camera1.k4: {cl.D[3]!s}\n",
 
-            f"Camera2.fx: {cr.K[0, 0]!s}\n",
-            f"Camera2.fy: {cr.K[1, 1]!s}\n",
-            f"Camera2.cx: {cr.K[0, 2]!s}\n",
-            f"Camera2.cy: {cr.K[1, 2]!s}\n",
-            f"Camera2.k1: {cr.D[0]!s}\n",
-            f"Camera2.k2: {cr.D[1]!s}\n",
-            f"Camera2.k3: {cr.D[2]!s}\n",
-            f"Camera2.k4: {cr.D[3]!s}\n",
-
-            AirMuseumConfigGenerator._opencv_matrix("Stereo.T_c1_c2", robot_data.H_LO_to_RO.as_matrix()),
-
-            # Overlap left as the full width -- conservative (ComputeStereoFishEyeMatches
-            # just searches a wider area, doesn't affect correctness), same as TUM-VI.yaml.
-            "Camera1.overlappingBegin: 0\n",
-            f"Camera1.overlappingEnd: {cl.width - 1}\n",
-            "Camera2.overlappingBegin: 0\n",
-            f"Camera2.overlappingEnd: {cr.width - 1}\n",
+            # Images are already rectified (zero distortion) -- not cl.D, which is
+            # Kalibr's fisheye [k1,k2,k3,k4], a different parameterization than
+            # PinHole's [k1,k2,p1,p2] here even though both are all zero.
+            "Camera1.k1: 0.0\n",
+            "Camera1.k2: 0.0\n",
+            "Camera1.p1: 0.0\n",
+            "Camera1.p2: 0.0\n",
 
             f"Camera.width: {cl.width}\n",
             f"Camera.height: {cl.height}\n",
             f"Camera.fps: {round(fps)}\n",  # Settings.cc reads this as an int, not a float.
             "Camera.RGB: 0\n", # Ignored as AirMuseum is greyscale
             "Stereo.ThDepth: 40.0\n", # Maybe need to tune
+            f"Stereo.b: {robot_data.stereo_baseline_m!s}\n",
+            "RGBD.DepthMapFactor: 1.0\n", # Depth is already in meters
             "loopClosing: 0\n", # Disabled
 
             AirMuseumConfigGenerator._opencv_matrix("IMU.T_b_c1", robot_data.H_I_to_LO.as_matrix()),
