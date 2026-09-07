@@ -63,7 +63,7 @@ class AirMuseumConfigGenerator:
             f"Camera2.k3: {cr.D[2]!s}\n",
             f"Camera2.k4: {cr.D[3]!s}\n",
 
-            AirMuseumConfigGenerator._opencv_matrix("Stereo.T_c1_c2", robot_data.H_RO_to_LO.as_matrix()),
+            AirMuseumConfigGenerator._opencv_matrix("Stereo.T_c1_c2", robot_data.H_LO_to_RO.as_matrix()),
 
             # Overlap left as the full width -- conservative (ComputeStereoFishEyeMatches
             # just searches a wider area, doesn't affect correctness), same as TUM-VI.yaml.

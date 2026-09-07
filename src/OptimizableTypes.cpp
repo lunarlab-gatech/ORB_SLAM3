@@ -147,7 +147,11 @@ namespace ORB_SLAM3 {
         double y = xyz_trans[1];
         double z = xyz_trans[2];
 
-        auto projectJac = -pCamera->projectJac(xyz_trans);
+        // Not auto: projectJac() returns a Matrix by value, and auto would deduce
+        // the lazy CwiseUnaryOp from operator-() instead of a concrete Matrix, leaving
+        // it holding a reference to a temporary that's gone by the time it's used below
+        // (confirmed with AddressSanitizer: stack-use-after-scope on this exact line).
+        Eigen::Matrix<double,2,3> projectJac = -pCamera->projectJac(xyz_trans);
 
         _jacobianOplusXi =  projectJac * T.rotation().toRotationMatrix();
 

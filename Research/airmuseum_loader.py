@@ -14,7 +14,12 @@ class AirMuseumRobotData:
     imu_data: ImuData
     ground_truth: OdometryData
     H_I_to_LO: TransformationData  # ORB-SLAM3's IMU.T_b_c1: raw Kalibr T_cam_imu, inverted. Same (raw, non-FLU) frame as imu_data.
-    H_RO_to_LO: TransformationData  # ORB-SLAM3's Stereo.T_c1_c2 (raw): p_RO = M @ p_LO, i.e. T_right_left -- ORB-SLAM3's "T_c1_c2" name is backwards from that (c1=left, c2=right).
+    
+    # ORB-SLAM3's Stereo.T_c1_c2 (raw): p_LO = M @ p_RO. Confirmed by tracing
+    # KannalaBrandt8::TriangulateMatches's actual math (not the PinHole-only
+    # cv::stereoRectify convention, which doesn't apply to this camera type
+    # and would suggest the opposite, left-to-right, direction).
+    H_LO_to_RO: TransformationData
 
 class AirMuseumDataLoaderSLAM:
     """Dataloader for the AirMuseum dataset."""
@@ -133,17 +138,17 @@ class AirMuseumDataLoaderSLAM:
                 AirMuseumDataLoaderSLAM.NAME_TO_FRAME_MAP[robot_name])
             H_I_to_LO = H_LO_to_I.invert()
 
-            # H_RO_to_LO: ORB-SLAM3's Stereo.T_c1_c2 (see AirMuseumRobotData.H_RO_to_LO).
+            # H_LO_to_RO: ORB-SLAM3's Stereo.T_c1_c2 (see AirMuseumRobotData.H_LO_to_RO).
             # from_kalibr_stereo() doesn't expose this (it only keeps K/D/R/P), so it's
             # read directly here: Kalibr's T_cn_cnm1 always lives under "cam1" and gives
             # cam1's pose w.r.t. cam0, i.e. p_cam1 = T_cn_cnm1 @ p_cam0 -- already
-            # H_RO_to_LO if cam1 is our right camera, or its inverse if cam1 is our left.
+            # H_LO_to_RO if cam1 is our left camera, or its inverse if cam1 is our right.
             H_CN_to_CNM1 = TransformationData.from_kalibr(
                 dataset_config_path / 'sensors' / calib_name, 'cam1', "T_cn_cnm1", CoordinateFrame.NONE)
             if AirMuseumDataLoaderSLAM.CAM_ID_TO_CALIB_NAME[right_cam_id] == 'cam0':
-                H_RO_to_LO = H_CN_to_CNM1.invert()
+                H_LO_to_RO = H_CN_to_CNM1
             else:
-                H_RO_to_LO = H_CN_to_CNM1
+                H_LO_to_RO = H_CN_to_CNM1.invert()
 
             # ===================================== Load Ground Truth ===========================================
             # GT is relabeled to a common FLU convention across robots purely for
@@ -162,7 +167,7 @@ class AirMuseumDataLoaderSLAM:
             robot_data[robot_name] = AirMuseumRobotData(
                 cam_data_left=cam_data_left, cam_data_right=cam_data_right,
                 left_image_data=left_image_data, right_image_data=right_image_data,
-                imu_data=imu_data, ground_truth=ground_truth, H_I_to_LO=H_I_to_LO, H_RO_to_LO=H_RO_to_LO,
+                imu_data=imu_data, ground_truth=ground_truth, H_I_to_LO=H_I_to_LO, H_LO_to_RO=H_LO_to_RO,
             )
             print(f"Loaded data for {robot_name} from {input_path}...")
 

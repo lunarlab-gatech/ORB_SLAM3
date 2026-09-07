@@ -9,8 +9,21 @@ MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
+# -march=native previously here: dropped (also independently in Thirdparty/g2o's
+# and Thirdparty/DBoW2's own CMakeLists.txt) as one candidate for a SIGSEGV in
+# PoseOptimization -- didn't fix it, but is worth keeping removed regardless
+# since it was silently creating a cross-library SIMD/ABI mismatch.
+#
+# The actual cause, confirmed with AddressSanitizer: g2o::HyperGraph::clear()
+# deletes vertices through a base HyperGraph::Vertex* (its VertexIDMap's value
+# type), but VertexSE3Expmap's EIGEN_MAKE_ALIGNED_OPERATOR_NEW-provided aligned
+# operator new/delete pair isn't reliably invoked through that base pointer --
+# ASan caught the resulting bad-free (freeing Eigen's aligned_malloc'd pointer,
+# which is offset from the real malloc() block, via plain ::operator delete).
+# EIGEN_MAX_ALIGN_BYTES=0 (Eigen's modern EIGEN_DONT_ALIGN) makes Eigen's
+# aligned allocator degrade to plain malloc/free everywhere, so this mismatch
+# becomes harmless regardless of which operator delete actually gets called.
+add_definitions(-DEIGEN_MAX_ALIGN_BYTES=0)
 
 # Check C++11 or C++0x support
 include(CheckCXXCompilerFlag)

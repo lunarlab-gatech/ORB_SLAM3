@@ -415,6 +415,18 @@ void FrameDrawer::Update(Tracking *pTracker)
             MapPoint* pMP = pTracker->mCurrentFrame.mvpMapPoints[i];
             if(pMP)
             {
+                // For stereo/fisheye frames (both==true), i ranges over the combined
+                // left+right keypoints (N = Nleft + Nright), but mvCurrentKeys only
+                // holds the left ones (mvCurrentKeys.size() == Nleft) -- fall through
+                // to mvCurrentKeysRight once i exceeds it, same convention Frame::
+                // AssignFeaturesToGrid() already uses for this same combined layout
+                // (Frame.cc: "(i < Nleft) ? mvKeys[i] : mvKeysRight[i - Nleft]").
+                // Previously this indexed mvCurrentKeys[i] unconditionally: an
+                // out-of-bounds read for any i in the right camera's range
+                // (confirmed with AddressSanitizer).
+                const cv::KeyPoint &kp = (i < (int)mvCurrentKeys.size()) ?
+                    mvCurrentKeys[i] : mvCurrentKeysRight[i - mvCurrentKeys.size()];
+
                 if(!pTracker->mCurrentFrame.mvbOutlier[i])
                 {
                     if(pMP->Observations()>0)
@@ -422,12 +434,12 @@ void FrameDrawer::Update(Tracking *pTracker)
                     else
                         mvbVO[i]=true;
 
-                    mmMatchedInImage[pMP->mnId] = mvCurrentKeys[i].pt;
+                    mmMatchedInImage[pMP->mnId] = kp.pt;
                 }
                 else
                 {
                     mvpOutlierMPs.push_back(pMP);
-                    mvOutlierKeys.push_back(mvCurrentKeys[i]);
+                    mvOutlierKeys.push_back(kp);
                 }
             }
         }

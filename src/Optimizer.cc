@@ -3140,7 +3140,14 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
             if(pKFi->isBad() || pKFi->mPrevKF->mnId>maxKFid)
                 continue;
             if(!pKFi->mpImuPreintegrated)
+            {
+                // This KF's preintegration is missing -- the check above used to just
+                // warn and fall through, dereferencing mpImuPreintegrated below anyway
+                // (a null-pointer segfault, matching a known unresolved upstream issue:
+                // https://github.com/UZ-SLAMLab/ORB_SLAM3/issues/289). Skip this KF instead.
                 std::cout << "Not preintegrated measurement" << std::endl;
+                continue;
+            }
 
             pKFi->mpImuPreintegrated->SetNewBias(pKFi->mPrevKF->GetImuBias());
             g2o::HyperGraph::Vertex* VP1 = optimizer.vertex(pKFi->mPrevKF->mnId);

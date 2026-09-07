@@ -34,7 +34,7 @@ namespace ORB_SLAM3
 
 LoopClosing::LoopClosing(Atlas *pAtlas, KeyFrameDatabase *pDB, ORBVocabulary *pVoc, const bool bFixScale, const bool bActiveLC):
     mbResetRequested(false), mbResetActiveMapRequested(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas),
-    mpKeyFrameDB(pDB), mpORBVocabulary(pVoc), mpMatchedKF(NULL), mLastLoopKFid(0), mbRunningGBA(false), mbFinishedGBA(true),
+    mpKeyFrameDB(pDB), mpORBVocabulary(pVoc), mpCurrentKF(NULL), mpMatchedKF(NULL), mLastLoopKFid(0), mbRunningGBA(false), mbFinishedGBA(true),
     mbStopGBA(false), mpThreadGBA(NULL), mbFixScale(bFixScale), mnFullBAIdx(0), mnLoopNumCoincidences(0), mnMergeNumCoincidences(0),
     mbLoopDetected(false), mbMergeDetected(false), mnLoopNumNotFound(0), mnMergeNumNotFound(0), mbActiveLC(bActiveLC)
 {
@@ -2244,6 +2244,11 @@ void LoopClosing::ResetIfRequested()
         mLastLoopKFid=0;  //TODO old variable, it is not use in the new algorithm
         mbResetRequested=false;
         mbResetActiveMapRequested = false;
+        // mpLastCurrentKF was never invalidated here, so the next Run() iteration could
+        // dereference a dangling pointer into a KeyFrame this reset just deleted
+        // (confirmed with AddressSanitizer: a SEGV in Run() reading mpLastCurrentKF's
+        // mvpLoopCandKFs after an active map reset).
+        mpLastCurrentKF = static_cast<KeyFrame*>(NULL);
     }
     else if(mbResetActiveMapRequested)
     {
@@ -2261,6 +2266,10 @@ void LoopClosing::ResetIfRequested()
 
         mLastLoopKFid=mpAtlas->GetLastInitKFid(); //TODO old variable, it is not use in the new algorithm
         mbResetActiveMapRequested=false;
+
+        // Same dangling-pointer issue as above, but scoped to the map actually being reset.
+        if(mpLastCurrentKF && mpLastCurrentKF->GetMap() == mpMapToReset)
+            mpLastCurrentKF = static_cast<KeyFrame*>(NULL);
 
     }
 }

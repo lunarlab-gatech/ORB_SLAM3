@@ -54,10 +54,24 @@ IF(OPENMP_FOUND AND G2O_USE_OPENMP)
 ENDIF(OPENMP_FOUND AND G2O_USE_OPENMP)
 
 # Compiler specific options for gcc
-SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -march=native")
-SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3 -march=native")
-# SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
-# SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
+# -march=native dropped: this is a separate CMake project from the root
+# ORB_SLAM3 build, so it was independently re-adding -march=native even after
+# removing it from the root CMakeLists.txt, silently creating a cross-library
+# SIMD/ABI mismatch between libg2o.so and libORB_SLAM3.so (Eigen types like
+# VertexSE3Expmap's SE3Quat are template-instantiated in both) -- a real
+# candidate for the g2o::VertexSE3Expmap::oplusImpl segfault being investigated.
+SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
+
+# Confirmed with AddressSanitizer: HyperGraph::clear() deletes vertices through
+# a base Vertex* (VertexIDMap's value type), which doesn't reliably reach
+# VertexSE3Expmap's EIGEN_MAKE_ALIGNED_OPERATOR_NEW-provided aligned operator
+# delete -- causing a bad-free of Eigen's aligned_malloc'd (offset) pointer via
+# plain ::operator delete. This makes Eigen's aligned allocator degrade to
+# plain malloc/free everywhere, so that mismatch becomes harmless. Must match
+# the root ORB_SLAM3 CMakeLists.txt's definition (same types cross this
+# library boundary), not just be set here.
+ADD_DEFINITIONS(-DEIGEN_MAX_ALIGN_BYTES=0)
 
 # activate warnings !!!
 SET(g2o_C_FLAGS "${g2o_C_FLAGS} -Wall -W")

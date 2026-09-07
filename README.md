@@ -233,3 +233,28 @@ A flag in `include\Config.h` activates time measurements. It is necessary to unc
 
 # 9. Calibration
 You can find a tutorial for visual-inertial calibration and a detailed description of the contents of valid configuration files at  `Calibration_Tutorial.pdf`
+
+# 10. AirMuseum Dataset (Python bindings)
+A pybind11 module (`orbslam3_python`) feeds one AirMuseum robot's Stereo-Inertial data, loaded via [robotdataprocess](Thirdparty/robotdataprocess), directly into `ORB_SLAM3::System` from Python -- no flat-file round trip. The dataset must already be present, e.g. at `~/data/AirMuseum_dataset/Scenario5`.
+
+## Build
+1. Install `robotdataprocess` (never `pip install -e`, that's an editable install):
+```
+pip3 install ./Thirdparty/robotdataprocess
+```
+No ROS install is required -- it reads `.bag` files via the pure-Python `rosbags` package.
+
+2. Install pybind11 and build as usual. The `orbslam3_python` CMake target is picked up automatically if pybind11 is found (skipped with a warning otherwise):
+```
+pip3 install pybind11
+./build.sh
+```
+This produces `lib/orbslam3_python.cpython-*.so` alongside `lib/libORB_SLAM3.so`.
+
+## Run
+```
+python3 Research/run_airmuseum.py --robot drone
+```
+`--robot` is one of `drone`, `robotA`, `robotB`, `robotC`. `--dataset-path` defaults to `~/data/AirMuseum_dataset/Scenario5`; `--output` sets the trajectory file prefix (defaults to `airmuseum_<robot>`); `--viewer` opens ORB-SLAM3's live Pangolin viewer for debugging (currently known to crash on process exit when enabled -- see the comment in `run_airmuseum.py`).
+
+Trajectories are always written to `output/airmuseum/<robot>/f_<prefix>.txt` (frame-by-frame) and `kf_<prefix>.txt` (keyframes only), TUM format. The generated ORB-SLAM3 config is written to `Examples/Stereo-Inertial/AirMuseum_<robot>.yaml`.

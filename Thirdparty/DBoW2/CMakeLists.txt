@@ -5,8 +5,13 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall  -O3 -march=native ")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall  -O3 -march=native")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall  -O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall  -O3")
+# -march=native dropped, and EIGEN_MAX_ALIGN_BYTES=0 added: for consistency
+# with the root ORB_SLAM3 and Thirdparty/g2o CMakeLists.txt (see the latter for
+# why) -- this is a separate CMake project too, so its own flags matter for
+# cross-library ABI consistency even if DBoW2 itself rarely touches Eigen.
+add_definitions(-DEIGEN_MAX_ALIGN_BYTES=0)
 
 set(HDRS_DBOW2
   DBoW2/BowVector.h
