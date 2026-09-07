@@ -26,6 +26,18 @@ class AirMuseumDataLoaderSLAM:
     MAX_VALID_DEPTH_M: float = 1000.0
 
     CROP_TIMES: dict[str, dict[str, tuple[Decimal, Optional[Decimal]]]] = {
+        "Scenario3": {
+            "drone": (Decimal('0.0'), None),
+            "robotA": (Decimal('0.0'), None),
+            "robotB": (Decimal('0.0'), None),
+            "robotC": (Decimal('0.0'), None),
+        },
+        "Scenario4": {
+            "drone": (Decimal('0.0'), None),
+            "robotA": (Decimal('0.0'), None),
+            "robotB": (Decimal('0.0'), None),
+            "robotC": (Decimal('0.0'), None),
+        },
         "Scenario5": {
             "drone": (Decimal('0.0'), None),
             "robotA": (Decimal('0.0'), None),

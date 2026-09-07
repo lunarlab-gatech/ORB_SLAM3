@@ -158,8 +158,8 @@ class AirMuseumRunner:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--robot", default="drone", choices=AirMuseumDataLoaderSLAM.ROBOT_LEFT_CAM.keys())
-    parser.add_argument("--dataset-path", default=str(Path.home() / "data" / "AirMuseum_dataset" / "Scenario5"),
+    parser.add_argument("--robot", default="robotA", choices=AirMuseumDataLoaderSLAM.ROBOT_LEFT_CAM.keys())
+    parser.add_argument("--dataset-path", default=str(Path.home() / "data" / "AirMuseum_dataset" / "Scenario3"),
                          help='e.g. .../AirMuseum_dataset/Scenario5')
     parser.add_argument("--mode", default=AirMuseumRunner.Mode.RGBD_INERTIAL.name.lower(),
                          choices=[m.name.lower() for m in AirMuseumRunner.Mode], help="Which ORB_SLAM3 sensor type to track with.")
